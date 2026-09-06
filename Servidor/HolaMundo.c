@@ -1,5 +1,4 @@
 #include <stdio.h>
-int main() {
+void hola_mundo() {
     printf("Hola Mundo\n");
-    return 0;
 }

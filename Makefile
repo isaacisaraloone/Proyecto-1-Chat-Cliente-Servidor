@@ -1,34 +1,38 @@
-.PHONY: all servidor cliente docs limpiar test-cliente test-servidor test-all
+.PHONY: all servidor run-servidor cliente run-cliente docs limpiar test-cliente test-servidor test-all 
 
 all: servidor cliente docs
 
 servidor:
-    gcc -Wall -o Servidor/servidor Servidor/main.c
-    @echo "Servidor compilado."
+	gcc -Wall -o Servidor/servidor Servidor/*.c
+	@echo "Servidor compilado."
+
+run-servidor:
+	./Servidor/servidor
 
 cliente:
-    cd Cliente && dotnet build
-    @echo "Cliente compilado."
+	cd Cliente && dotnet build
+	@echo "Cliente compilado."
+
+run-cliente:
+	cd Cliente && dotnet run
 
 docs:
-    pdflatex -output-directory=Reporte Reporte/reporte.tex
-    @echo "Reporte generado."
+	pdflatex -output-directory=Reporte Reporte/reporte.tex
+	@echo "Reporte generado."
 
 limpiar:
-    rm -f Servidor/servidor
-    cd Cliente && dotnet clean
-    rm -f Reporte/*.pdf Reporte/*.aux Reporte/*.log Reporte/*.out Reporte/*.toc
-    @echo "Limpieza hecha."
+	rm -f Servidor/servidor
+	cd Cliente && dotnet clean
+	rm -f Reporte/*.pdf Reporte/*.aux Reporte/*.log Reporte/*.out Reporte/*.toc
+	@echo "Limpieza hecha."
 
 test-cliente:
-    cd Cliente && dotnet test
+	cd Cliente && dotnet test
 
 test-servidor:
-    gcc -Wall -o Servidor/test_servidor Servidor/test.c
-    ./Servidor/test_servidor
-    @echo "Pruebas del servidor ejecutadas."
+	gcc -Wall -o Servidor/test_servidor Servidor/test.c
+	./Servidor/test_servidor
+	@echo "Pruebas del servidor ejecutadas."
 
 test-all: test-cliente test-servidor
-    @echo "Todas las pruebas unitarias ejecutadas."
-
-
+	@echo "Todas las pruebas unitarias ejecutadas."
