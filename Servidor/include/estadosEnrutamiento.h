@@ -1,1 +1,0 @@
-void hola_mundo();

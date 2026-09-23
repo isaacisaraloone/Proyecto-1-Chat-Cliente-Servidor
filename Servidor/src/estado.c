@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../include/salasUsuario.h"
+#include "../include/estado.h"
 
 void Incializar(struct EstadoGlobal* estado) {
 	estado->listaUsuarios = NULL;
@@ -128,13 +128,116 @@ int CrearSala(struct EstadoGlobal* estado, const char* roomname, const char* cre
 			nuevaSala->roomname[MAX_ROOMNAME_LEN - 1] = '\0';
 			nuevaSala->activos = NULL;
 			nuevaSala->invitados = NULL;
+
+			struct MiembroSala* creador = (struct MiembroSala*)malloc(sizeof(struct MiembroSala));
+			strncpy(creador->username, creadorUsername, MAX_USERNAME_LEN - 1);
+			creador->username[MAX_USERNAME_LEN - 1] = '\0';
+			creador->usuario = NULL;
+
+			HASH_ADD_STR(nuevaSala->activos, username, creador);
+			HASH_ADD_STR(estado->listaSalas, roomname, nuevaSala);
+
+			resultado = 1;
+
 		}
 		
 	}
+
+	pthread_mutex_unlock(&estado->mutexSalas);
+	return resultado;
 }
 
-int Invitacion(){}
+int Invitacion(struct EstadoGlobal* estado, const char* roomname, const char* username, const char* invitadoPor){
+	struct Sala* sala = NULL;
+	int resultado = 0;
 
-int UnirseSala(){}
+	pthread_mutex_lock(&estado->mutexSalas);
+	HASH_FIND_STR(estado->listaSalas, roomname, sala);
 
-void DejarSala(){}
+	if (sala == NULL){
+		resultado = 2;
+	} else {
+		struct MiembroSala* anfitrion = NULL;
+		HASH_FIND_STR(sala->activos, invitadoPor, anfitrion);
+
+		if (anfitrion == NULL) {
+			resultado = 4;
+		} else {
+			struct MiembroSala* yaDentro = NULL;
+			struct MiembroSala* yaInvitado = NULL;
+			HASH_FIND_STR(sala->activos, username, yaDentro);
+			HASH_FIND_STR(sala->invitados, username, yaInvitado);
+
+			if (yaDentro != NULL || yaInvitado != NULL){
+				resultado = 3;
+			} else {
+				struct MiembroSala* nuevoInvitado = (struct MiembroSala*)malloc(sizeof(struct MiembroSala));
+				strncpy(nuevoInvitado->username, username, MAX_USERNAME_LEN - 1);
+				nuevoInvitado->username[MAX_USERNAME_LEN - 1] = '\0';
+
+				HASH_ADD_STR(sala->invitados, username, nuevoInvitado);
+				resultado = 1;
+			}
+		}
+	}
+	pthread_mutex_unlock(&estado->mutexSalas);
+	return resultado;
+}
+
+int UnirseSala(struct EstadoGlobal* estado, const char* roomname, const char* username){
+	struct Sala* sala = NULL;
+	int resultado = 0;
+	pthread_mutex_lock(&estado->mutexSalas);
+	HASH_FIND_STR(estado->listaSalas, roomname, sala);
+
+	if (sala == NULL){
+		resultado = 2;
+	} else{
+		struct MiembroSala* invitado = NULL;
+		HASH_FIND_STR(sala->invitados, username, invitado);
+
+		if (invitado == NULL) {
+			resultado = 3;
+		} else {
+			HASH_DEL(sala->invitados,invitado);
+			HASH_ADD_STR(sala->activos, username, invitado);
+			resultado = 1;
+		}
+	}
+	
+	pthread_mutex_unlock(&estado->mutexSalas);
+	return resultado;	
+}
+
+void DejarSala(struct EstadoGlobal* estado, const char* roomname, const  char* username){
+	struct Sala* sala = NULL;
+
+	pthread_mutex_lock(&estado->mutexSalas);
+	HASH_FIND_STR(estado->listaSalas, roomname, sala);
+
+	if (sala != NULL) {
+		struct MiembroSala* miembro = NULL;
+		HASH_FIND_STR(sala->activos, username, miembro);
+
+		if (miembro != NULL) {
+			HASH_DEL(sala->activos, miembro);
+			free(miembro);
+
+			if (sala->activos == NULL) {
+
+				struct MiembroSala *invitadoActual, *invitadoTemp;
+				HASH_ITER(hh, sala->invitados, invitadoActual, invitadoTemp) {
+					HASH_DEL(sala->invitados, invitadoActual);
+					free(invitadoActual);
+				}
+
+				HASH_DEL(estado->listaSalas, sala);
+				free(sala);
+			}
+		}
+		
+	}
+
+	pthread_mutex_unlock(&estado->mutexSalas);
+
+}

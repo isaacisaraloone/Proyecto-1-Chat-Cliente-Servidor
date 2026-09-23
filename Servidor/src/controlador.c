@@ -5,20 +5,21 @@
 #include <sys/socket.h>
 
 #include "../include/controlador.h"
-#include "../include/estadosEnrutamiento.h"
+#include "../include/red.h"
+#include "../lib/cJSON.h"
 
 #define MAX_MSG_SIZE 1048576
 #define CHUNK_SIZE 4096
 
-void* ControladorCliente_IniciarHilo(void* argumento) {
+void* IniciarHilo(void* argumento) {
 	struct ControladorCliente* cliente = (struct ControladorCliente*)argumento;
-	ControladorCliente_IniciarLectura(cliente);
-	ControladorCliente_ManejarDesconexion(cliente);
+	IniciarLectura(cliente);
+	ManejarDesconexion(cliente);
 	free(cliente);
 	return NULL;
 }
 
-void ControladorCliente_IniciarLectura(struct ControladorCliente* cliente) {
+void IniciarLectura(struct Cliente* cliente) {
 	char* buffer = (char*)malloc(MAX_MSG_SIZE);
 	if (buffer == NULL) {
 		fprintf(stderr, "Memoria insuficiente para el bufer.");
@@ -74,3 +75,85 @@ void ControladorCliente_IniciarLectura(struct ControladorCliente* cliente) {
 
 	free(buffer);
 }
+
+void EnrutarMensaje (struct Cliente* this, char* mensajeBruto){
+	cJSON* json = cJSON_Parse(mensajeBruto);
+
+	if (json == NULL) {
+		EnviarErrorCritico(this->socket);
+		return;
+	}
+
+	cJSON* item = cJSON_GetObjectItemCaseSensitive(json, "type");
+	if (!cJSON_IsString(item) || item->valuestring == NULL) {
+		cJSON_Delete(json);
+		EnviarErrorCritico(this->socket);
+		return;
+	}
+
+	char* tipo = item->valuestring;
+
+	if(!this->identificado && strcmp(tipo, "IDENTIFY") != 0) {
+		cJSON_Delete(json);
+		EnviarErrorCritico(this->socket);
+		return;
+	}
+
+	if (strcmp(tipo, "IDENTIFY") == 0) {
+		cJSON* item = cJSON_GetObjectItemCaseSensitive(json, "username");
+
+		if(cJSON_IsString(item) && item->valuestring != NULL) {
+			if (strlen(item->valuestring) <= 8) {
+				bool registrado = RegistrarUsuario(this->estado, item->valuestring, this->socket);
+
+				if (registrado) {
+					this->identificado = true;
+					strcpy(this->username, item->valuestring);
+
+				} else {
+
+				}
+			} else {
+				EnviarErrorCritico(this->socket);
+			}
+		} else {
+			EnviarErrorCritico(this->socket);
+		}
+	} else if (strcmp(tipo, "STATUS") == 0){
+		cJSON* item = cJSON_GetObjectItemCaseSensitive(json, "status");
+
+		if (cJSON_IsString(item) && item->valuestring != NULL) {
+			char* nuevoEstado = item->valuestring;
+
+			if (strcmp(nuevoEstado, "ACTIVE") == 0 ||
+				strcmp(nuevoEstado, "AWAY") == 0 ||
+				strcmp(nuevoEstado, "BUSY") == 0){
+					ActualizarEstadoUsuario(this->estado, this->username, nuevoEstado);
+					EnviarNuevoEstado(this->estado, this->username, nuevoEstado);
+				} else {
+					EnviarErrorCritico(this->socket);
+				}
+		} else {
+			EnviarErrorCritico(this->socket);
+		}
+	} else if (strcmp(tipo, "DISCONNECT") == 0) {
+		ManejarDesconexion(this);
+	} else {
+		EnviarErrorCritico(this->socket);
+	}
+
+	cJSON_Delete(json);
+}
+
+void ManejarDesconexion(struct Cliente* this) {
+	if (this->identificado){
+		EliminarUsuario(this->estado, this->username);
+		EnviarDesconexion(this->estado,this->username);
+		this->identificado = false;
+	}
+	if (this->socket != -1) {
+		close(this->socket);
+		this->socket = -1;
+	}
+}
+

@@ -2,9 +2,9 @@
 #define CONTROLADOR_H
 
 #include <stdbool.h>
-#include "salasUsuario.h"
+#include "estado.h"
 
-struct ControladorCliente {
+struct Cliente {
 	int socket;
 	struct EstadoGlobal* estado;
 
@@ -12,12 +12,12 @@ struct ControladorCliente {
 	char username[MAX_USERNAME_LEN];
 };
 
-void* ControladorCliente_IniciarHilo(void* argumento);
+void* IniciarHilo(void* argumento);
 
-void ControladorCliente_IniciarLectura(struct ControladorCliente* this);
+void IniciarLectura(struct Cliente* this);
 
-void ControladorCliente_EnrutarMensaje(struct ControladorCliente* this, char* mensajeBruto);
+void EnrutarMensaje(struct Cliente* this, char* mensajeBruto);
 
-void ControladorCliente_ManejarDesconexion(struct ControladorCliente* this);
+void ManejarDesconexion(struct Cliente* this);
 
 #endif // CONTROLADOR_H

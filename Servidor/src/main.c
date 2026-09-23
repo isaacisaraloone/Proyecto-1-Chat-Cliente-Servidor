@@ -76,7 +76,7 @@ int main(int argc, char **argv) {
 
 		printf("Cliente aceptado\n");
 
-		struct ControladorCliente* controlador = (struct ControladorCliente*)malloc(sizeof(struct ControladorCliente));
+		struct Cliente* controlador = (struct Cliente*)malloc(sizeof(struct Cliente));
 		if (controlador == NULL) {
 			perror("Error asignando memoria para cliente.\n");
 			close(clienteEnchufe);
@@ -89,7 +89,7 @@ int main(int argc, char **argv) {
 		memset(controlador->username, 0, sizeof(controlador->username));
 
 		pthread_t hiloCliente;
-		if (pthread_create(&hiloCliente, NULL, ControladorCliente_IniciarHilo, (void*)controlador) != 0) {
+		if (pthread_create(&hiloCliente, NULL, IniciarHilo, (void*)controlador) != 0) {
 			perror("Error al crear el hilo");
 			close(clienteEnchufe);
 			free(controlador);

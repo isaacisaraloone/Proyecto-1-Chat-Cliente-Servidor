@@ -1,5 +1,5 @@
-#ifndef SALASUSUARIO_H
-#define SALASUSUARIO_H
+#ifndef ESTADO_H
+#define ESTADO_H
 
 #include <pthread.h>
 #include <stdbool.h>
@@ -17,13 +17,12 @@ struct Usuario {
 };
 
 struct MiembroSala {
-	char roomname[MAX_ROOMNAME_LEN];
+	char username[MAX_USERNAME_LEN];
 	struct Usuario* usuario;
 	UT_hash_handle hh;
 };
 
-struct Sala
-{
+struct Sala {
 	char roomname[MAX_ROOMNAME_LEN];
 	struct MiembroSala* activos;
 	struct MiembroSala* invitados;
@@ -46,9 +45,9 @@ bool ExisteUsuario(struct EstadoGlobal* estado, const char* username);
 void EliminarUsuario(struct EstadoGlobal* estado, const char* username);
 void ActualizarEstadoUsuario();
 
-int CrearSala();
-int Invitacion();
-int UnirseSala();
-void DejarSala();
+int CrearSala(struct EstadoGlobal* estado, const char* roomname, const char* creadorUsername);
+int Invitacion(struct EstadoGlobal* estado, const char* roomname, const char* username, const char* invitadoPor);
+int UnirseSala(struct EstadoGlobal* estado, const char* roomname, const char* username);
+void DejarSala(struct EstadoGlobal* estado, const char* roomname, const char* username);
 
-#endif // SALASUSUARIO_H
+#endif // ESTADO_H
