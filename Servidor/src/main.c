@@ -7,9 +7,24 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <signal.h>
+#include <stdbool.h>
 
-#include "../include/salasUsuario.h"
+#include "../include/estado.h"
 #include "../include/controlador.h"
+
+volatile bool servidorActivo = true;
+int servidorEnchufe;
+
+void Comprobador(int senal) {
+	if (senal == SIGINT) {
+		printf("\nLimpiando recursos...\n");
+		servidorActivo = false;
+
+		shutdown(servidorEnchufe, SHUT_RDWR);
+		close(servidorEnchufe);
+	}
+}
 
 struct EstadoGlobal estadoGlobal;
 
@@ -32,7 +47,6 @@ int main(int argc, char **argv) {
 	CODIGO ROBADO DE: https://github.com/parthnan/FullTCP-Chat-in-C/
 	*/
 
-	int servidorEnchufe;
 	struct sockaddr_in svr, clt;
 	int reuse = 1;
 
@@ -64,12 +78,15 @@ int main(int argc, char **argv) {
 	FIN DEL CODIGO ROBADO.
 	*/
 
+	signal(SIGINT, Comprobador);
+
 	printf("Servidor escuchando en el puerto %d...\n", puerto);
 
-	while (1) {
+	while (servidorActivo) {
 		socklen_t clen = sizeof(clt);
 		int clienteEnchufe = accept(servidorEnchufe, (struct sockaddr *)&clt, &clen);
 		if (clienteEnchufe < 0) {
+			if (!servidorActivo) break;
 			perror("Error aceptando conexion");
 			continue;
 		}
@@ -98,7 +115,8 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	printf("Cerrando el servidor");	
 	close(servidorEnchufe);
-	SalasUsuario_Destruir(&estadoGlobal);
+	Destruir(&estadoGlobal);
 	return 0;
 }

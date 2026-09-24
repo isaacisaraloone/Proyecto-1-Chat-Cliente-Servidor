@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -pthread -I./Servidor/include -I./Servidor/lib
+CFLAGS = -Wall -Wextra -pthread -I./Servidor/include -I./Servidor/lib -I./Servidor/lib/uthash
 LDFLAGS = -pthread
 
 .PHONY: all servidor abrir-servidor cliente abrir-cliente reporte abrir-reporte limpiar test-cliente test-servidor test-all clienteServidor

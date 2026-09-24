@@ -43,11 +43,14 @@ void Destruir(struct EstadoGlobal* estado);
 bool RegistrarUsuario(struct EstadoGlobal* estado, const char* username, int socket);
 bool ExisteUsuario(struct EstadoGlobal* estado, const char* username);
 void EliminarUsuario(struct EstadoGlobal* estado, const char* username);
-void ActualizarEstadoUsuario();
+void ActualizarEstadoUsuario(struct EstadoGlobal* estado, const char* username, const char* nuevoEstatus);
+void EliminarUsuarioDeSalas(struct EstadoGlobal* estado, const char* username);
 
 int CrearSala(struct EstadoGlobal* estado, const char* roomname, const char* creadorUsername);
 int Invitacion(struct EstadoGlobal* estado, const char* roomname, const char* username, const char* invitadoPor);
 int UnirseSala(struct EstadoGlobal* estado, const char* roomname, const char* username);
 void DejarSala(struct EstadoGlobal* estado, const char* roomname, const char* username);
+
+int ObtenerSocketUsuario(struct EstadoGlobal* estado, const char* username);
 
 #endif // ESTADO_H

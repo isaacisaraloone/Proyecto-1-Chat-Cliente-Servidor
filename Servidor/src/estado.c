@@ -3,7 +3,7 @@
 #include <string.h>
 #include "../include/estado.h"
 
-void Incializar(struct EstadoGlobal* estado) {
+void Inicializar(struct EstadoGlobal* estado) {
 	estado->listaUsuarios = NULL;
 	estado->listaSalas = NULL;
 	
@@ -110,6 +110,40 @@ void ActualizarEstadoUsuario(struct EstadoGlobal* estado, const char* username, 
 	}
 
 	pthread_mutex_unlock(&estado->mutexUsuarios);
+}
+
+void EliminarUsuarioDeSalas(struct EstadoGlobal* estado, const char* username){
+	struct Sala *salaActual, *salaTemp;
+
+	pthread_mutex_lock(&estado->mutexSalas);
+
+	HASH_ITER(hh, estado->listaSalas, salaActual, salaTemp){
+		struct MiembroSala* miembro = NULL;
+
+		HASH_FIND_STR(salaActual->activos, username, miembro);
+		if (miembro != NULL) {
+			HASH_DEL(salaActual->activos, miembro);
+			free(miembro);
+
+			if (salaActual->activos == NULL) {
+				struct MiembroSala *invitadoActual, *invitadoTemp;
+				HASH_ITER(hh, salaActual->invitados, invitadoActual, invitadoTemp) {
+					HASH_DEL(salaActual->invitados, invitadoActual);
+					free(invitadoActual);
+				}
+				HASH_DEL(estado->listaSalas, salaActual);
+				free(salaActual);
+			}
+		} else {
+			HASH_FIND_STR(salaActual->invitados, username, miembro);
+			if (miembro != NULL) {
+				HASH_DEL(salaActual->invitados, miembro);
+				free(miembro);
+			}
+		}
+	}
+
+	pthread_mutex_unlock(&estado->mutexSalas);
 }
 
 int CrearSala(struct EstadoGlobal* estado, const char* roomname, const char* creadorUsername){
@@ -239,5 +273,23 @@ void DejarSala(struct EstadoGlobal* estado, const char* roomname, const  char* u
 	}
 
 	pthread_mutex_unlock(&estado->mutexSalas);
+
+}
+
+int ObtenerSocketUsuario(struct EstadoGlobal* estado, const char* username) {
+	struct Usuario* usuarioExistente = NULL;
+	int socket = -1;
+
+	pthread_mutex_lock(&estado->mutexUsuarios);
+
+	HASH_FIND_STR(estado->listaUsuarios, username, usuarioExistente);
+
+	if (usuarioExistente != NULL) {
+		socket = usuarioExistente->socket;
+	}
+
+	pthread_mutex_unlock(&estado->mutexUsuarios);
+
+	return socket;
 
 }

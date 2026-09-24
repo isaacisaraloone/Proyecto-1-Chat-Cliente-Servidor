@@ -21,4 +21,13 @@ void EnviarListaSala(int socket, const char* roomname, struct EstadoGlobal* esta
 void EnviarTextoSala(int socket, const char* roomname, const char* usuarioRemitente, const char* texto);
 void EnviarAbandono(int socket, const char* roomname, const char* usuario);
 
+void TransmitirNuevoUsuario(struct EstadoGlobal* estado, const char* usuarioNuevo);
+void TransmitirNuevoEstado(struct EstadoGlobal* estado, const char* usuario, const char* nuevoEstado);
+void TransmitirDesconexion(struct EstadoGlobal* estado, const char* usuario);
+void TransmitirMensajePublico(struct EstadoGlobal* estado, const char* usuarioRemitente, const char* texto);
+
+void TransmitirTextoSala(struct EstadoGlobal* estado, const char* roomname, const char* usuarioRemitente, const char* texto);
+void AvisoUnionSala(struct EstadoGlobal* estado, const char* roomname, const char* username);
+void AvisoAbandonoSala(struct EstadoGlobal* estado, const char* roomname, const char* username);
+
 #endif // RED_H
