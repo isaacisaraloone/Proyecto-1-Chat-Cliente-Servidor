@@ -11,7 +11,7 @@ servidor:
 	@echo "Servidor compilado."
 
 abrir-servidor:
-	./Servidor/servidor
+	./Servidor/servidor 1234
 
 cliente:
 	cd Cliente && dotnet build

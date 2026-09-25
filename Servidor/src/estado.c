@@ -168,6 +168,13 @@ int CrearSala(struct EstadoGlobal* estado, const char* roomname, const char* cre
 			creador->username[MAX_USERNAME_LEN - 1] = '\0';
 			creador->usuario = NULL;
 
+			struct Usuario* usuarioReal = NULL;
+			pthread_mutex_lock(&estado->mutexUsuarios);
+			HASH_FIND_STR(estado->listaUsuarios, creadorUsername, usuarioReal);
+			pthread_mutex_unlock(&estado->mutexUsuarios);
+
+			creador->usuario = usuarioReal;
+
 			HASH_ADD_STR(nuevaSala->activos, username, creador);
 			HASH_ADD_STR(estado->listaSalas, roomname, nuevaSala);
 
@@ -197,20 +204,26 @@ int Invitacion(struct EstadoGlobal* estado, const char* roomname, const char* us
 		if (anfitrion == NULL) {
 			resultado = 4;
 		} else {
-			struct MiembroSala* yaDentro = NULL;
-			struct MiembroSala* yaInvitado = NULL;
-			HASH_FIND_STR(sala->activos, username, yaDentro);
-			HASH_FIND_STR(sala->invitados, username, yaInvitado);
+			struct Usuario* usuarioD = NULL;
+			pthread_mutex_lock(&estado->mutexUsuarios);
+			HASH_FIND_STR(estado->listaUsuarios, username, usuarioD);
+			pthread_mutex_unlock(&estado->mutexUsuarios);
 
-			if (yaDentro != NULL || yaInvitado != NULL){
-				resultado = 3;
+			if (usuarioD == NULL){
+				resultado = 5;
 			} else {
-				struct MiembroSala* nuevoInvitado = (struct MiembroSala*)malloc(sizeof(struct MiembroSala));
-				strncpy(nuevoInvitado->username, username, MAX_USERNAME_LEN - 1);
-				nuevoInvitado->username[MAX_USERNAME_LEN - 1] = '\0';
-
-				HASH_ADD_STR(sala->invitados, username, nuevoInvitado);
-				resultado = 1;
+				struct MiembroSala* yaDentro = NULL;
+				HASH_ADD_STR(sala->invitados, username, yaDentro);
+				if (yaDentro != NULL){
+					resultado = 3;
+				} else {
+					struct MiembroSala* invitado = (struct MiembroSala*)malloc(sizeof(struct MiembroSala));
+					strncpy(invitado->username, username, MAX_USERNAME_LEN - 1);
+					invitado->username[MAX_USERNAME_LEN - 1] = '\0';
+					invitado->usuario = usuarioD;
+					HASH_ADD_STR(sala->activos, username, invitado);
+					resultado = 1;
+				}
 			}
 		}
 	}
@@ -234,6 +247,14 @@ int UnirseSala(struct EstadoGlobal* estado, const char* roomname, const char* us
 			resultado = 3;
 		} else {
 			HASH_DEL(sala->invitados,invitado);
+
+			struct Usuario* usuarioReal = NULL;
+			pthread_mutex_lock(&estado->mutexUsuarios);
+			HASH_FIND_STR(estado->listaUsuarios, username, usuarioReal);
+			pthread_mutex_unlock(&estado->mutexUsuarios);
+
+			invitado->usuario = usuarioReal;
+
 			HASH_ADD_STR(sala->activos, username, invitado);
 			resultado = 1;
 		}

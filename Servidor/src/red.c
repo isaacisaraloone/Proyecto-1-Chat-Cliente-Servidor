@@ -257,7 +257,7 @@ void AvisoUnionSala(struct EstadoGlobal* estado, const char* roomname, const cha
 	cJSON_AddStringToObject(json, "type", "JOINED_ROOM");
 	cJSON_AddStringToObject(json, "roomname", roomname);
 	cJSON_AddStringToObject(json, "username", username);
-	TransmitirSalaJSON(estado, roomname, json, username);
+	TransmitirSalaJSON(estado, roomname, json, NULL);
 }
 
 void AvisoAbandonoSala(struct EstadoGlobal* estado, const char* roomname, const char* username) {

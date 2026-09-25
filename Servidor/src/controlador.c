@@ -192,13 +192,14 @@ void EnrutarMensaje (struct Cliente* this, char* mensajeBruto){
 		if (cJSON_IsString(roomname) && cJSON_IsString(invitado)) {
 			int resultado = Invitacion(this->estado, roomname->valuestring, invitado->valuestring, this->username);
 			if (resultado == 1) {
-                int dest_socket = ObtenerSocketUsuario(this->estado, invitado->valuestring);
-				EnviarInvitacion(dest_socket, this->username, roomname->valuestring);
+				AvisoUnionSala(this->estado, roomname->valuestring, invitado->valuestring);
 			} else if (resultado == 2) {
 				EnviarRespuesta(this->socket, "INVITE", "NO_SUCH_ROOM", NULL);
 			} else if (resultado == 4) {
                 EnviarRespuesta(this->socket, "INVITE", "NOT_JOINED", NULL);
-            }
+            } else if (resultado == 5) {
+				EnviarRespuesta(this->socket, "INVITE", "NO_SUCH_USER", invitado->valuestring);
+			}
 		} else {
 			EnviarErrorCritico(this->socket);
 		}
@@ -232,7 +233,7 @@ void EnrutarMensaje (struct Cliente* this, char* mensajeBruto){
 		cJSON* roomname = cJSON_GetObjectItemCaseSensitive(json, "roomname");
 		cJSON* texto = cJSON_GetObjectItemCaseSensitive(json, "text");
 		if (cJSON_IsString(roomname) && cJSON_IsString(texto)) {
-			EnviarTextoSala(this->socket, roomname->valuestring, this->username, texto->valuestring);
+			TransmitirTextoSala(this->estado, roomname->valuestring, this->username, texto->valuestring);
 		} else{
 			EnviarErrorCritico(this->socket);
 		}
