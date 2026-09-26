@@ -6,8 +6,6 @@ namespace Cliente
     {
         static void Main(string[] args)
 		{
-			HolaMundo prueba = new HolaMundo();
-			prueba.saludo();
 		}
     }
 }
