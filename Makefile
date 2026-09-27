@@ -21,7 +21,7 @@ abrir-cliente:
 	cd Cliente && dotnet run
 
 reporte:
-	pdflatex -output-directory=Reporte Reporte/reporte.tex
+	tectonic --outdir Reporte Reporte/reporte.tex
 	@echo "Reporte generado."
 
 abrir-reporte:
@@ -30,7 +30,7 @@ abrir-reporte:
 limpiar:
 	rm -f Servidor/servidor
 	cd Cliente && dotnet clean
-	rm -f Reporte/*.pdf Reporte/*.aux Reporte/*.log Reporte/*.out Reporte/*.toc Reporte/*.fls Reporte/*.fdb_latexmk
+	rm -f Reporte/*.pdf
 	@echo "Limpieza hecha."
 
 clienteServidor:
