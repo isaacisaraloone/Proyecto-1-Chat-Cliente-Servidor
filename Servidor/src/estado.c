@@ -213,8 +213,11 @@ int Invitacion(struct EstadoGlobal* estado, const char* roomname, const char* us
 				resultado = 5;
 			} else {
 				struct MiembroSala* yaDentro = NULL;
-				HASH_ADD_STR(sala->invitados, username, yaDentro);
-				if (yaDentro != NULL){
+				HASH_FIND_STR(sala->invitados, username, yaDentro);
+				struct MiembroSala* yaActivo = NULL;
+				HASH_FIND_STR(sala->activos, username, yaActivo);
+
+				if (yaDentro != NULL || yaActivo != NULL){
 					resultado = 3;
 				} else {
 					struct MiembroSala* invitado = (struct MiembroSala*)malloc(sizeof(struct MiembroSala));

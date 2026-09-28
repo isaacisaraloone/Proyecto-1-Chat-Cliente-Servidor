@@ -25,7 +25,7 @@ namespace Cliente
 							Console.WriteLine("Uso: /estado <AWAY|BUSY|ACTIVE");
 							break;
 						}
-						mensajesJSON.Add(JsonSerializer.Serialize(new { type = "STATUS", estado = partes[1].ToUpper() }));
+						mensajesJSON.Add(JsonSerializer.Serialize(new { type = "STATUS", status = partes[1].ToUpper() }));
 						break;
 
 					case "/usuarios":
@@ -39,7 +39,7 @@ namespace Cliente
 							break;
 						}
 						string mensajeTexto = string.Join(" ", partes, 2, partes.Length -2);
-						mensajesJSON.Add(JsonSerializer.Serialize(new { type = "TEXT", username = partes[1], texto = mensajeTexto}));
+						mensajesJSON.Add(JsonSerializer.Serialize(new { type = "TEXT", username = partes[1], text = mensajeTexto}));
 						break;
 
 					case "/publico":
@@ -49,7 +49,7 @@ namespace Cliente
 							break;
 						}
 						string textoPublico = string.Join(" ", partes, 1, partes.Length - 1);
-						mensajesJSON.Add(JsonSerializer.Serialize(new { type = "PUBLIC_TEXT", texto = textoPublico}));
+						mensajesJSON.Add(JsonSerializer.Serialize(new { type = "PUBLIC_TEXT", text = textoPublico}));
 						break;
 
 					case "/nuevasala":
@@ -89,7 +89,7 @@ namespace Cliente
 							break;
 						}
 						string mensajeSala = string.Join(" ", partes, 2, partes.Length -2);
-						mensajesJSON.Add(JsonSerializer.Serialize(new { type = "ROOM_TEXT", roomname = partes[1], texto = mensajeSala }));
+						mensajesJSON.Add(JsonSerializer.Serialize(new { type = "ROOM_TEXT", roomname = partes[1], text = mensajeSala }));
 						break;
 
 					case "/irse":
@@ -203,7 +203,7 @@ namespace Cliente
 
 					case "ROOM_TEXT_FROM":
 						Console.ForegroundColor = ConsoleColor.Green;
-						Console.WriteLine($"[SALA {raiz.GetProperty("roomname").GetString()} - {raiz.GetProperty("username").GetString()}]: {raiz.GetProperty("text").GetString}");
+						Console.WriteLine($"[SALA {raiz.GetProperty("roomname").GetString()} - {raiz.GetProperty("username").GetString()}]: {raiz.GetProperty("text").GetString()}");
 						Console.ResetColor();
 						break;
 
