@@ -18,7 +18,7 @@ cliente:
 	@echo "Cliente compilado."
 
 abrir-cliente:
-	cd Cliente && dotnet run
+	cd Cliente && dotnet run 127.0.0.1 1234
 
 reporte:
 	tectonic --outdir Reporte Reporte/reporte.tex

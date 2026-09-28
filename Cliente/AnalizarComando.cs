@@ -124,7 +124,109 @@ namespace Cliente
 
 		public void ProcesarMensajeServidor(string json)
 		{
-			
+			try
+			{
+				using var doc = JsonDocument.Parse(json);
+				var raiz = doc.RootElement;
+		
+				if (!raiz.TryGetProperty("type", out var tipoE)) return;
+				string tipo = tipoE.GetString() ?? "";
+
+				switch (tipo)
+				{
+					case "RESPONSE":
+						Console.ForegroundColor = ConsoleColor.DarkGray;
+						string op = raiz.GetProperty("operation").GetString() ?? "";
+						string res = raiz.GetProperty("result").GetString() ?? "";
+						string extra = raiz.TryGetProperty("extra", out var extE) ? extE.GetString() ?? "" : "";
+						Console.WriteLine($"[SERVIDOR] Respuesta a {op}: {res} {extra}");
+						Console.ResetColor();
+						break;
+
+					case "NEW_USER":
+						Console.ForegroundColor = ConsoleColor.Cyan;
+						Console.WriteLine($"[SISTEMA] El usuario {raiz.GetProperty("username").GetString()} se ha conectado.");
+						Console.ResetColor();
+						break;
+
+					case "NEW_STATUS":
+						Console.ForegroundColor = ConsoleColor.Cyan;
+						Console.WriteLine($"[SISTEMA] {raiz.GetProperty("username").GetString()} ahora esta {raiz.GetProperty("status").GetString()}.");
+						Console.ResetColor();
+						break;
+
+					case "USER_LIST":
+						Console.ForegroundColor = ConsoleColor.Cyan;
+						Console.WriteLine("[SISTEMA] Usuarios conectados:");
+						var usuarios = raiz.GetProperty("users").EnumerateObject();
+						foreach (var usuario in usuarios)
+						{
+							Console.WriteLine($"  - {usuario.Name}: {usuario.Value.GetString()}");
+						}
+						Console.ResetColor();
+						break;
+
+					case "TEXT_FROM":
+						Console.ForegroundColor = ConsoleColor.Magenta;
+						Console.WriteLine($"[PRIVADO de {raiz.GetProperty("username").GetString()}]: {raiz.GetProperty("text").GetString()}");
+						Console.ResetColor();
+						break;
+
+					case "PUBLIC_TEXT_FROM":
+						Console.ForegroundColor = ConsoleColor.Yellow;
+						Console.WriteLine($"[PÚBLICO de {raiz.GetProperty("username").GetString()}]: {raiz.GetProperty("text").GetString()}");
+						Console.ResetColor();
+						break;
+
+					case "INVITATION":
+						Console.ForegroundColor = ConsoleColor.Cyan;
+						Console.WriteLine($"[SISTEMA] {raiz.GetProperty("username").GetString()} te ha invitado a la sala '{raiz.GetProperty("roomname").GetString()}'.");
+						Console.ResetColor();
+						break;
+
+					case "JOINED_ROOM":
+						Console.ForegroundColor = ConsoleColor.Green;
+						Console.WriteLine($"[SALA {raiz.GetProperty("roomname").GetString()}] {raiz.GetProperty("username").GetString()} se ha unido.");
+						Console.ResetColor();
+						break;
+
+					case "ROOM_USER_LIST":
+						Console.ForegroundColor = ConsoleColor.Green;
+						Console.WriteLine($"[SALA {raiz.GetProperty("roomname").GetString()}] Usuarios en la sala:");
+						var usuariosSala = raiz.GetProperty("users").EnumerateObject();
+						foreach (var usuario in usuariosSala)
+						{
+							Console.WriteLine($"  - {usuario.Name}: {usuario.Value.GetString()}");
+						}
+						Console.ResetColor();
+						break;
+
+					case "ROOM_TEXT_FROM":
+						Console.ForegroundColor = ConsoleColor.Green;
+						Console.WriteLine($"[SALA {raiz.GetProperty("roomname").GetString()} - {raiz.GetProperty("username").GetString()}]: {raiz.GetProperty("text").GetString}");
+						Console.ResetColor();
+						break;
+
+					case "LEFT_ROOM":
+						Console.ForegroundColor = ConsoleColor.Green;
+						Console.WriteLine($"[SALA {raiz.GetProperty("roomname").GetString()}] {raiz.GetProperty("username").GetString()} ha salido.");
+						Console.ResetColor();
+						break;
+
+					case "DISCONNECTED":
+						Console.ForegroundColor = ConsoleColor.Cyan;
+						Console.WriteLine($"[SISTEMA] El usuario {raiz.GetProperty("username").GetString()} se ha desconectado.");
+						Console.ResetColor();
+						break;
+
+					default:
+						Console.WriteLine($"[DESCONOCIDO] {json}");
+						break;
+				}
+			}
+			catch
+			{
+			}
 		}
 
 		public void AyudaVisual()
