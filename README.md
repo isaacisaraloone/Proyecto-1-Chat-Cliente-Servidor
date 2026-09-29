@@ -29,7 +29,7 @@ Para abrir el reporte usa el comando:
 
 NOTA:
 El servidor tambien puede ejecutarse mediante otro puerto con: 
-- ./Servidor/servidor <puerto>
+- ./Servidor/servidor < puerto >
 
 El cliente puede conectarse a otro IP y puerto con: 
-- cd Cliente && dotnet run <ip_servidor> <puerto>
+- cd Cliente && dotnet run < ip_servidor > < puerto >
