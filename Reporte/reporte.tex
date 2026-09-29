@@ -1,9 +1,435 @@
-\documentclass{article}
-\usepackage[utf8]{inputenc}
+\documentclass[12pt,a4paper]{article}
 \usepackage[spanish]{babel}
-\title{Reporte del Proyecto 1 Chat Cliente-Servidor}
-\author{Isaac Armando Alvarado Trujillo}
+\usepackage[utf8]{inputenc}
+\usepackage{hyperref}
+\usepackage{geometry}
+\geometry{top=2cm, bottom=2cm, left=2.2cm, right=2.2cm}
+\usepackage{amsmath,amssymb}\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{tikz}
+\usetikzlibrary{babel,shapes.geometric,arrows.meta,positioning,fit,backgrounds,calc}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!70!black,
+    citecolor=blue!70!black,
+    urlcolor=blue!70!black
+}
+
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.97,0.97,0.97}
+\definecolor{codeblue}{rgb}{0.13,0.13,0.7}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegray}\itshape,
+    keywordstyle=\color{codeblue}\bfseries,
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+\lstset{style=mystyle}
+
+\title{\textbf{Reporte Proyecto 1: Modelado e Implementación de un Chat Cliente-Servidor}}
+\author{Alvarado Trujillo Isaac Armando}
+\date{\today}
+
 \begin{document}
+
 \maketitle
-Hola Mundo.
+
+\section{Resumen}
+ Proyecto desarrollado para la materia de Modelado y Programación. Consiste de un sistema de mensajería instantánea concurrente, con la arquitectura Cliente-Servidor mediante sockets TCP/IP y usando un protocolo de comunicación estructurado en formato JSON.
+
+\section{Introducción}
+
+\subsection{Objetivo del Proyecto}
+Desarrollar, modelar y validar una solución cliente-servidor para mensajería que implemente la especificación formal del protocolo basado en JSON, garantizando una concurrencia segura, administrar salas privadas dinámicas mediante invitaciones, control de presencia de usuarios y manejo de fallos.
+
+\subsection{Alcance}
+El sistema contempla lo siguiente:
+\begin{itemize}
+    \item \textbf{Autenticación de sesión:} Identificación obligatoria de usuarios con nombres únicos de hasta 8 caracteres antes de poder ejecutar cualquier acción en el servidor.
+    \item \textbf{Control de presencia:} Tres estados de usuario (\texttt{ACTIVE}, \texttt{AWAY}, \texttt{BUSY}), notificando inmediatamente los cambios al resto de la comunidad conectada.
+    \item \textbf{Intercambio de mensajes:} Envío de mensajes globales a todos los usuarios conectados y mensajería directa entre usuarios registrados.
+    \item \textbf{Gestión de salas de salas de conversación:} Creación de salas privadas con nombres de hasta 16 caracteres, mecanismo de invitación selectiva, verificación de membresía antes del ingreso, intercambio de mensajes exclusivos dentro del canal y autodestrucción inmediata de la sala cuando su último miembro activo la abandona.
+    \item \textbf{Desconexión ordenada:} Liberación de recursos en memoria y aviso de desconexión al resto de clientes.
+\end{itemize}
+
+\subsection{Posibles problemas enfrentados y facilidades encontradas}
+Durante el desarrollo se identifico algunas complejidades técnicas:
+\begin{itemize}
+    \item \textbf{Gestión de memoria y concurrencia:} El servidor maneja punteros compartidos entre hilos para representar a los usuarios y sus participaciones en salas. La eliminación prematura de un usuario mientras otro hilo itera sobre la lista de la sala requirió un esquema de exclusión mutua mediante dos mutex independientes: \texttt{mutexUsuarios} y \texttt{mutexSalas}.
+    \item \textbf{Operabilidad entre plataformas:} Asegurar que la serialización de C\# generara cadenas UTF-8 idénticas a las esperadas por \texttt{cJSON} en C.
+\end{itemize}
+Las facilidades destacas:
+\begin{itemize}
+    \item El uso de la biblioteca de macros \texttt{uthash}, que permite dotar a cualquier estructura en C de capacidades de tabla hash sin necesidad de escribir algoritmos de dispersión y rehasheo manual.
+    \item La biblioteca \texttt{cJSON}, cuyo árbol jerárquico simplificó la extracción tipada y validación de campos.
+    \item Las facilidades de .NET 9 en C\# (\texttt{TcpClient}, \texttt{StreamReader.ReadLine()} y \texttt{JsonDocument}), que abstraen el framing por saltos de línea y la deserialización no tipada.
+\end{itemize}
+
+\section{Análisis y Diseño (Modelado)}
+Para cumplir con los requerimientos, la arquitectura del servidor se diseñó bajo los siguientes enfoques:
+
+\subsection{Patrones de Diseño y Principios Arquitectónicos}
+El sistema implementa varios patrones reconocidos de la ingeniería de software:
+\begin{enumerate}
+    \item \textbf{Patrón Despachador / Controlador (Dispatcher / Front Controller):} Implementado en \texttt{controlador.c} a través de la función \texttt{EnrutarMensaje()}. El controlador actúa como punto único de entrada para todas las peticiones entrantes de un cliente, valida la sintaxis JSON, comprueba el estado de autenticación y deriva el flujo hacia el manejador de negocio específico.
+    \item \textbf{Patrón Observador / Publicador-Suscriptor (Pub-Sub):} El servidor funge como un broker de mensajería. En las difusiones públicas (\texttt{TransmitirMensajePublico}) o de salas (\texttt{TransmitirTextoSala}), el canal actúa como sujeto o tópico, y los sockets conectados son los observadores que reciben la notificación sin acoplamiento entre sí.
+    \item \textbf{Patrón Monitor / Región Crítica:} En el módulo \texttt{estado.c}, el acceso a las estructuras dinámicas \texttt{listaUsuarios} y \texttt{listaSalas} está encapsulado detrás de funciones que adquieren y liberan rigurosamente los cerrojos \texttt{mutexUsuarios} y \texttt{mutexSalas}, garantizando la atomicidad e invariabilidad de los datos.
+    \item \textbf{Separación en Capas (Separation of Concerns):}
+    \begin{itemize}
+        \item \textit{Capa de Red (\texttt{red.c}):} Responsable exclusiva de la codificación y emisión física de bytes por los sockets.
+        \item \textit{Capa de Negocio y Control (\texttt{controlador.c}):} Lógica de aplicación, enrutamiento y validaciones.
+        \item \textit{Capa de Datos y Estado (\texttt{estado.c}):} Manipulación pura de las estructuras en memoria volátil.
+    \end{itemize}
+\end{enumerate}
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+    scale=0.82, every node/.style={transform shape},
+    node distance=1.3cm,
+    block/.style={rectangle, draw=blue!70, fill=blue!10, rounded corners, align=center, minimum height=1cm, minimum width=3cm, font=\small\bfseries},
+    clientblock/.style={rectangle, draw=green!60!black, fill=green!10, rounded corners, align=center, minimum height=1cm, minimum width=3cm, font=\small\bfseries},
+    data/.style={cylinder, draw=purple!70, fill=purple!10, shape border rotate=90, aspect=0.25, align=center, minimum height=1.1cm, minimum width=2.6cm, font=\small\bfseries},
+    arrow/.style={thick, ->, >=stealth}
+]
+
+\node[clientblock] (cli_input) {Consola / Usuario};
+\node[clientblock, below=0.6cm of cli_input] (cli_analizador) {AnalizarComando};
+\node[clientblock, below=0.6cm of cli_analizador] (cli_conexion) {ManejarConexion};
+
+\begin{scope}[on background layer]
+    \node[draw=green!50!black, fill=green!5, dashed, rounded corners, fit=(cli_input) (cli_analizador) (cli_conexion), label=above:\textbf{Cliente C\# (.NET 9.0)}] (client_box) {};
+\end{scope}
+
+\draw[thick, <->, >=stealth, dashed, red!80!black] (cli_conexion) -- ++(2.8cm,0) node[midway, above, font=\footnotesize] {TCP Stream} node[midway, below, font=\footnotesize] {JSON + '\textbackslash n'};
+
+\node[block, right=3.8cm of cli_conexion] (srv_red) {Módulo Red\\(red.c)};
+\node[block, above=0.6cm of srv_red] (srv_ctrl) {Controlador / Dispatcher\\(controlador.c)};
+\node[block, above=0.6cm of srv_ctrl] (srv_main) {Escucha / Hilos\\(main.c)};
+\node[data, right=1.2cm of srv_ctrl] (srv_estado) {Estado Global\\(estado.c / uthash)};
+
+\begin{scope}[on background layer]
+    \node[draw=blue!70, fill=blue!5, dashed, rounded corners, fit=(srv_main) (srv_ctrl) (srv_red) (srv_estado), label=above:\textbf{Servidor en C (POSIX)}] (server_box) {};
+\end{scope}
+
+\draw[arrow] (cli_input) -- (cli_analizador);
+\draw[arrow] (cli_analizador) -- (cli_conexion);
+\draw[arrow] (srv_main) -- node[right, font=\tiny] {pthread\_create} (srv_ctrl);
+\draw[arrow] (srv_ctrl) -- (srv_red);
+\draw[arrow, <->] (srv_ctrl) -- node[above, font=\tiny] {Mutex} (srv_estado);
+\draw[arrow, <->] (srv_red) -- (srv_estado);
+
+\end{tikzpicture}
+\caption{Diagrama de arquitectura del sistema de chat distribuido.}
+\label{fig:arquitectura}
+\end{figure}
+
+\subsection{Modelado de Estructuras de Datos y clases}
+\subsubsection{Estructuras en el Servidor (C)}
+\begin{itemize}[noitemsep]
+    \item \texttt{struct Usuario}: Identificador \texttt{username[9]}, descriptor \texttt{socket}, estado \texttt{status[10]} y handle \texttt{UT\_hash\_handle hh}.
+    \item \texttt{struct MiembroSala}: Asociación de usuario a sala con nombre y puntero a \texttt{Usuario}.
+    \item \texttt{struct Sala}: Nombre \texttt{roomname[17]}, tablas hash internas (\texttt{activos} e \texttt{invitados}) y handle \texttt{hh}.
+    \item \texttt{struct EstadoGlobal}: Tablas raíz (\texttt{listaUsuarios} y \texttt{listaSalas}) protegidas por \texttt{mutexUsuarios} y \texttt{mutexSalas}.
+    \item \texttt{struct Cliente}: Contexto por hilo con socket privado, referencia al estado global y credencial validada.
+\end{itemize}
+
+\subsubsection{Clases en el Cliente (C\#)}
+\begin{itemize}[noitemsep]
+    \item \texttt{Program}: Punto de entrada que procesa argumentos CLI (\texttt{ip} y \texttt{puerto}) e invoca \texttt{Chat}.
+    \item \texttt{Chat}: Orquestador del ciclo de vida. Administra autenticación inicial y bifurca hilo receptor.
+    \item \texttt{ManejarConexion}: Abstracción del socket TCP mediante \texttt{TcpClient}, \texttt{StreamReader} y \texttt{StreamWriter}.
+    \item \texttt{AnalizarComando}: Parser bidireccional de comandos a JSON y de eventos JSON a texto coloreado.
+\end{itemize}
+\subsection{Especificación del Protocolo de Comunicación}
+El protocolo define una gramática estricta en JSON donde todo mensaje finaliza invariablemente en \texttt{\textbackslash n}. En las Tablas~\ref{tab:proto_req} y~\ref{tab:proto_resp} se resumen las interacciones fundamentales del sistema.
+
+\begin{table}[htbp]
+\centering
+\footnotesize
+\renewcommand{\arraystretch}{0.92}
+\begin{tabularx}{\textwidth}{l p{4.5cm} p{3.2cm} X}
+\toprule
+\textbf{Comando (Tipo)} & \textbf{Parámetros Clave} & \textbf{Respuesta Servidor} & \textbf{Efecto / Propósito} \\
+\midrule
+\texttt{IDENTIFY} & \texttt{username: string} & \texttt{RESPONSE} / \texttt{NEW\_USER} & Registra el usuario si no existe (máx 8 car.). \\
+\texttt{STATUS} & \texttt{status: string} & \texttt{NEW\_STATUS} (broadcast) & Cambia estado a \texttt{ACTIVE}, \texttt{AWAY} o \texttt{BUSY}. \\
+\texttt{USERS} & \textit{Ninguno} & \texttt{USER\_LIST} & Retorna catálogo global de usuarios y estados. \\
+\texttt{TEXT} & \texttt{username, text} & Directo o \texttt{NO\_SUCH\_USER} & Mensaje privado al destinatario indicado. \\
+\texttt{PUBLIC\_TEXT} & \texttt{text: string} & \texttt{PUBLIC\_TEXT\_FROM} & Difusión general a todos los usuarios. \\
+\texttt{NEW\_ROOM} & \texttt{roomname: string} & \texttt{RESPONSE} & Crea una nueva sala (máx 16 car.) y une al creador. \\
+\texttt{INVITE} & \texttt{roomname, username} & \texttt{INVITATION} / error & Invita a usuarios si el emisor ya es miembro. \\
+\texttt{JOIN\_ROOM} & \texttt{roomname: string} & \texttt{RESPONSE} / \texttt{JOINED\_ROOM} & Se une a una sala habiendo sido invitado. \\
+\texttt{ROOM\_USERS} & \texttt{roomname: string} & \texttt{ROOM\_USER\_LIST} & Consulta lista de miembros de la sala. \\
+\texttt{ROOM\_TEXT} & \texttt{roomname, text} & \texttt{ROOM\_TEXT\_FROM} & Envía mensaje grupal exclusivo en la sala. \\
+\texttt{LEAVE\_ROOM} & \texttt{roomname: string} & \texttt{LEFT\_ROOM} / \texttt{RESPONSE} & Abandona sala; si queda vacía, se destruye. \\
+\texttt{DISCONNECT} & \textit{Ninguno} & \texttt{DISCONNECTED} & Cierra sesión, abandona salas y libera socket. \\
+\bottomrule
+\end{tabularx}
+\caption{Mensajes enviados desde el cliente hacia el servidor.}
+\label{tab:proto_req}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\footnotesize
+\renewcommand{\arraystretch}{0.92}
+\begin{tabularx}{\textwidth}{l p{4.2cm} X}
+\toprule
+\textbf{Mensaje Servidor} & \textbf{Parámetros Clave} & \textbf{Significado y Destinatario} \\
+\midrule
+\texttt{RESPONSE} & \texttt{operation, result, [extra]} & Resultado de operación (\texttt{SUCCESS}, \texttt{USER\_ALREADY\_EXISTS}, etc.). \\
+\texttt{NEW\_USER} & \texttt{username} & Notificación global a otros usuarios ante nueva conexión. \\
+\texttt{NEW\_STATUS} & \texttt{username, status} & Notificación global ante cambio de estado de un participante. \\
+\texttt{USER\_LIST} & \texttt{users: \{user: status\}} & Diccionario con todos los usuarios conectados y sus estados. \\
+\texttt{TEXT\_FROM} & \texttt{username, text} & Entrega de mensaje privado recibido de otro usuario. \\
+\texttt{PUBLIC\_TEXT\_FROM} & \texttt{username, text} & Entrega de mensaje de difusión general recibido. \\
+\texttt{INVITATION} & \texttt{username, roomname} & Notificación al usuario de que ha sido invitado a unirse a una sala. \\
+\texttt{JOINED\_ROOM} & \texttt{roomname, username} & Notificación a miembros de sala sobre la incorporación de alguien. \\
+\texttt{ROOM\_USER\_LIST} & \texttt{roomname, users: \{...\}} & Catálogo de integrantes activos en una sala específica. \\
+\texttt{ROOM\_TEXT\_FROM} & \texttt{roomname, username, text} & Mensaje grupal entregado a los miembros de la sala. \\
+\texttt{LEFT\_ROOM} & \texttt{roomname, username} & Aviso a miembros de sala sobre el abandono de un usuario. \\
+\texttt{DISCONNECTED} & \texttt{username} & Aviso global de que un usuario ha abandonado el servidor. \\
+\bottomrule
+\end{tabularx}
+\caption{Mensajes y notificaciones emitidos por el servidor hacia los clientes.}
+\label{tab:proto_resp}
+\end{table}
+
+\subsection{Mapeo de Comandos de Interfaz en C\#}
+En la Tabla~\ref{tab:cli_commands} se detalla la traducción interna que efectúa la clase \texttt{AnalizarComando} desde la entrada textual de consola hacia los mensajes JSON del protocolo.
+
+\begin{table}[htbp]
+\centering
+\footnotesize
+\renewcommand{\arraystretch}{0.92}
+\begin{tabularx}{\textwidth}{l p{3.8cm} X}
+\toprule
+\textbf{Comando CLI} & \textbf{Sintaxis de Entrada} & \textbf{Acción y Tipo de Mensaje JSON} \\
+\midrule
+\texttt{/estado} & \texttt{/estado <AWAY|BUSY|ACTIVE>} & Genera trama \texttt{STATUS} con nuevo estatus. \\
+\texttt{/usuarios} & \texttt{/usuarios} & Genera trama \texttt{USERS} para solicitar el listado. \\
+\texttt{/privado} & \texttt{/privado <user> <texto>} & Genera trama \texttt{TEXT} con destinatario y contenido. \\
+\texttt{/publico} & \texttt{/publico <texto>} & Genera trama \texttt{PUBLIC\_TEXT} para difusión general. \\
+\texttt{/nuevasala} & \texttt{/nuevasala <nombre>} & Genera trama \texttt{NEW\_ROOM} para fundar un canal. \\
+\texttt{/invitar} & \texttt{/invitar <sala> <u1> [u2...]} & Genera una o múltiples tramas \texttt{INVITE}. \\
+\texttt{/salausuarios} & \texttt{/salausuarios <sala>} & Genera trama \texttt{ROOM\_USERS} para ver miembros. \\
+\texttt{/mensajesala} & \texttt{/mensajesala <sala> <texto>} & Genera trama \texttt{ROOM\_TEXT} para charla grupal. \\
+\texttt{/irse} & \texttt{/irse <sala>} & Genera trama \texttt{LEAVE\_ROOM} para abandonar el canal. \\
+\texttt{/cerrar} & \texttt{/cerrar} & Genera trama \texttt{DISCONNECT} para cerrar sesión. \\
+\texttt{/ayuda} & \texttt{/ayuda} & Muestra menú contextual en consola (sin enviar red). \\
+\bottomrule
+\end{tabularx}
+\caption{Mapeo de comandos del cliente de consola a primitivas del protocolo.}
+\label{tab:cli_commands}
+\end{table}
+
+\subsection{Diagramas de Comportamiento}
+
+\subsubsection{Diagrama de Secuencia: Autenticación y Envío de Mensaje Privado}
+La Figura~\ref{fig:seq_auth} ilustra la secuencia de handshake y transmisión de mensajes privados entre dos clientes coordinados por el servidor.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+    scale=0.78, every node/.style={transform shape},
+    lifeline/.style={thick, dashed, gray},
+    entity/.style={rectangle, draw=blue!70, fill=blue!10, rounded corners, minimum height=0.7cm, minimum width=2cm, font=\small\bfseries},
+    msg/.style={thick, ->, >=stealth},
+    reply/.style={thick, dashed, ->, >=stealth}
+]
+
+\node[entity] (c1) {Cliente A (Armando)};
+\node[entity, right=3.2cm of c1] (srv) {Servidor};
+\node[entity, right=3.2cm of srv] (c2) {Cliente B (Isaac)};
+
+\draw[lifeline] (c1) -- ++(0,-5.8);
+\draw[lifeline] (srv) -- ++(0,-5.8);
+\draw[lifeline] (c2) -- ++(0,-5.8);
+
+\draw[msg] ($(c1)+(0,-0.8)$) -- node[above, font=\footnotesize] {IDENTIFY ("Armando")} ($(srv)+(0,-0.8)$);
+\draw[reply] ($(srv)+(0,-1.4)$) -- node[above, font=\footnotesize] {RESPONSE (SUCCESS)} ($(c1)+(0,-1.4)$);
+\draw[msg] ($(srv)+(0,-2.0)$) -- node[above, font=\footnotesize] {NEW\_USER ("Armando")} ($(c2)+(0,-2.0)$);
+
+\draw[msg] ($(c1)+(0,-2.9)$) -- node[above, font=\footnotesize] {TEXT ("Isaac", "Hola!")} ($(srv)+(0,-2.9)$);
+\draw[msg] ($(srv)+(0,-3.6)$) -- node[above, font=\footnotesize] {TEXT\_FROM ("Armando", "Hola!")} ($(c2)+(0,-3.6)$);
+
+\draw[msg] ($(c1)+(0,-4.5)$) -- node[above, font=\footnotesize] {STATUS ("BUSY")} ($(srv)+(0,-4.5)$);
+\draw[msg] ($(srv)+(0,-5.2)$) -- node[above, font=\footnotesize] {NEW\_STATUS ("Armando", "BUSY")} ($(c2)+(0,-5.2)$);
+
+\end{tikzpicture}
+\caption{Diagrama de secuencia: Autenticación, difusión y mensajería privada.}
+\label{fig:seq_auth}
+\end{figure}
+
+\subsubsection{Diagrama de Estados: Ciclo de Vida del Usuario y de las Salas}
+En la Figura~\ref{fig:estados} se representan las transiciones de estado de un usuario dentro de la sesión, así como el ciclo de vida de una sala desde su creación hasta su eliminación.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+    scale=0.82, every node/.style={transform shape},
+    node distance=1.8cm,
+    st/.style={rectangle, draw=blue!80, fill=blue!10, rounded corners, minimum height=0.8cm, minimum width=2.2cm, align=center, font=\footnotesize\bfseries},
+    trans/.style={thick, ->, >=stealth, font=\tiny}
+]
+
+\node[st] (desconectado) {Desconectado};
+\node[st, right=1.8cm of desconectado] (no_ident) {Conectado\\(No identificado)};
+\node[st, right=1.8cm of no_ident] (activo) {ACTIVE};
+\node[st, above=1cm of activo] (away) {AWAY};
+\node[st, below=1cm of activo] (busy) {BUSY};
+
+\draw[trans] (desconectado) -- node[above] {TCP Connect} (no_ident);
+\draw[trans] (no_ident) -- node[above] {IDENTIFY (Ok)} (activo);
+\draw[trans] (no_ident) to[bend left=35] node[below] {Timeout/Error} (desconectado);
+\draw[trans, <->] (activo) -- node[right] {STATUS} (away);
+\draw[trans, <->] (activo) -- node[right] {STATUS} (busy);
+\draw[trans, <->] (away) to[bend left=55] node[left] {STATUS} (busy);
+\draw[trans] (activo) to[bend left=25] node[above] {DISCONNECT / Cierre} (desconectado);
+
+\begin{scope}[on background layer]
+    \node[draw=blue!50, dashed, rounded corners, fit=(desconectado) (no_ident) (activo) (away) (busy), label=above:\textbf{Máquina de Estados de Presencia de Usuario}] {};
+\end{scope}
+
+\end{tikzpicture}
+\caption{Máquina de estados de un usuario en el servidor.}
+\label{fig:estados}
+\end{figure}
+
+\section{Implementación}
+
+\subsection{Tecnologías y Entornos de Desarrollo}
+La implementación se hizo garantizando la máxima compatibilidad entre C, C\# y Latex:
+\begin{itemize}
+    \item \textbf{Servidor en C:}
+    \begin{itemize}
+        \item \textit{Sockets POSIX:} Llamadas del sistema \texttt{socket()}, \texttt{setsockopt(SO\_REUSEADDR)}, \texttt{bind()}, \texttt{listen()}, \texttt{accept()}, \texttt{recv()} y \texttt{send()}.
+        \item \textit{Pthreads:} Creación de hilos independientes por cliente con \texttt{pthread\_create()} en modo detached (\texttt{pthread\_detach()}) para la recolección automática de recursos al finalizar.
+        \item \textit{uthash:} Biblioteca de un solo archivo de cabecera (\texttt{uthash.h}) que implementa estructuras hash en C usando macros de preprocesador.
+        \item \textit{cJSON:} Parser de JSON en C puro utilizado para construir y parsear los payloads JSON de manera dinámica.
+    \end{itemize}
+    \item \textbf{Cliente en C\# (.NET 9.0):}
+    \begin{itemize}
+        \item \textit{System.Net.Sockets:} Clase de alto nivel \texttt{TcpClient} que gestiona la conexión TCP subyacente.
+        \item \textit{System.IO:} Abstracción mediante \texttt{StreamReader} y \texttt{StreamWriter} con \texttt{AutoFlush = true}, asegurando que cada línea escrita se vacíe instantáneamente en el socket hacia la red.
+        \item \textit{System.Text.Json:} Procesamiento de documentos JSON mediante \texttt{JsonDocument} y serialización con \texttt{JsonSerializer}.
+        \item \textit{System.Threading:} Hilo secundario (\texttt{Thread}) asignado a la ejecución continua del método \texttt{EscucharMensajes()}.
+    \end{itemize}
+    \item \textbf{Herramientas de Construcción:}
+    \begin{itemize}
+        \item \textbf{GNU Make:} Automatización de compilación, ejecución de pruebas, limpieza y generación de reporte.
+        \item \textbf{GCC:} Compilador GNU para C con banderas de optimización y depuración (\texttt{-Wall -Wextra -pthread}).
+        \item \textbf{Tectonic:} Motor de composición de documentos XeTeX moderno que resuelve paquetes LaTeX de manera automatizada.
+    \end{itemize}
+\end{itemize}
+
+\subsection{Lectura a trozos y Manejo del Buffer TCP}
+Uno de los componentes del servidor radica en la función \texttt{IniciarLectura()} ubicada en \texttt{controlador.c}. Debido a que TCP no entrega mensajes completos predefinidos, la implementación emplea un buffer lineal de hasta 1~MB (\texttt{MAX\_MSG\_SIZE}) con lecturas progresivas de fragmentos (\texttt{CHUNK\_SIZE = 4096} bytes).
+
+El algoritmo de lectura implementado opera de la siguiente forma:
+\begin{enumerate}
+    \item Se reciben bytes con \texttt{recv()} y se agregan al final de la memoria ocupada (\texttt{buffer\_len += n\_recv}).
+    \item Se inspecciona el buffer en busca del carácter delimitador \texttt{\textbackslash n} mediante la función de biblioteca de alta velocidad \texttt{memchr()}.
+    \item Si se encuentra un salto de línea:
+    \begin{itemize}
+        \item Se calcula la longitud del mensaje $L = nl - buffer$.
+        \item Se reserva memoria temporal y se copia la cadena terminada en \texttt{\textbackslash 0}.
+        \item Si el mensaje no está vacío ni es un retorno de carro residual (\texttt{\textbackslash r}), se transfiere a \texttt{EnrutarMensaje()}.
+        \item Los bytes posteriores al salto de línea se desplazan al inicio del buffer mediante \texttt{memmove(buffer, nl + 1, restantes)}, actualizando \texttt{buffer\_len}.
+    \end{itemize}
+    \item Se repite el ciclo interno hasta procesar todas las tramas completas acumuladas en el buffer antes de volver a bloquearse en \texttt{recv()}.
+\end{enumerate}
+
+\subsection{Sincronización y Prevención}
+Como el uso de múltiples hilos de clientes compiten por modificar o leer las listas de usuarios y salas, en \texttt{estado.c} se optó por el bloqueo granular:
+\begin{itemize}
+    \item \textbf{\texttt{mutexUsuarios}:} Protege exclusivamente las operaciones sobre \texttt{listaUsuarios} (registro de usuario, validación de existencia, consulta de socket y actualización de estado).
+    \item \textbf{\texttt{mutexSalas}:} Protege las operaciones sobre \texttt{listaSalas}, incluyendo las tablas anidadas de miembros \texttt{activos} e \texttt{invitados} de cada sala.
+\end{itemize}
+
+\subsection{Requerimientos del Sistema}
+Para la compilación y ejecución exitosa del proyecto, el entorno debe disponer de los siguientes elementos:
+\begin{itemize}
+    \item Sistema Operativo: GNU/Linux (probado en distribuciones Linux Mint y Cachy Os).
+    \item Compilador: \texttt{gcc} versión 9.0 o superior con soporte de POSIX Threads.
+    \item Plataforma .NET: SDK de .NET 9.0 (\texttt{dotnet-sdk-9.0}).
+    \item Herramienta de compilación: \texttt{make} (GNU Make).
+    \item Motor de Reportes: \texttt{tectonic} versión 0.15 para la generación del PDF.
+\end{itemize}
+
+\subsection{Instrucciones de Compilación y Ejecución}
+La raíz del proyecto incluye un archivo \texttt{Makefile} que automatiza todas las tareas operativas. En la Tabla~\ref{tab:makefile} se resumen los comandos disponibles.
+
+\begin{table}[htbp]
+\centering
+\footnotesize
+\renewcommand{\arraystretch}{0.92}
+\begin{tabularx}{\textwidth}{l p{4.2cm} X}
+\toprule
+\textbf{Comando Make} & \textbf{Acción Ejecutada} & \textbf{Descripción} \\
+\midrule
+\texttt{make all} & \texttt{servidor cliente reporte} & Compila ambos componentes y genera el reporte PDF. \\
+\texttt{make servidor} & Compila con \texttt{gcc} el servidor & Produce el binario ejecutable \texttt{Servidor/servidor}. \\
+\texttt{make abrir-servidor} & \texttt{./Servidor/servidor 1234} & Lanza el servidor escuchando en el puerto local 1234. \\
+\texttt{make cliente} & \texttt{dotnet build} en \texttt{Cliente/} & Compila el proyecto C\# generando binarios en \texttt{obj/}. \\
+\texttt{make abrir-cliente} & \texttt{dotnet run 127.0.0.1 1234} & Inicia una instancia interactiva del cliente CLI. \\
+\texttt{make reporte} & \texttt{tectonic ... reporte.tex} & Compila el código fuente LaTeX a PDF. \\
+\texttt{make abrir-reporte} & \texttt{xdg-open Reporte/reporte.pdf} & Abre el visor de documentos PDF del sistema. \\
+\texttt{make limpiar} & \texttt{rm} y \texttt{dotnet clean} & Elimina binarios compilados y archivos temporales. \\
+\bottomrule
+\end{tabularx}
+\caption{Metas y comandos definidos en el archivo Makefile.}
+\label{tab:makefile}
+\end{table}
+
+\section{Conclusiones}
+
+El desarrollo del  proyecto permitió aprender de manera práctica los conceptos fundamentales de modelado y programación de sistemas concurrentes y distribuidos:
+\begin{enumerate}
+    \item \textbf{Eficacia del Protocolo Basado en JSON y Saltos de Línea:} La elección JSON delimitadas por \texttt{\textbackslash n} demostró ser sumamente robusta. Facilitó la interoperabilidad entre dos entornos con modelos distintos: el nivel de C y el nivel de C\#/.
+    \item \textbf{Control de Concurrencia y Sincronización:} La implementación de exclusión mutua con cerrojos independientes (\texttt{mutexUsuarios} y \texttt{mutexSalas}) para garantizar la integridad del estado en memoria, permitiendo que múltiples usuarios interactúen simultáneamente sin inducir condiciones de carrera, inconsistencias de punteros ni bloqueos mutuos.
+    \item \textbf{Resolución del Desafío de Framing en TCP:} Se demostró experimentalmente que asumir que una lectura \texttt{recv()} equivale a un paquete lógico es un error grave en redes. La implementación del buffer con búsqueda y compactación de memoria resolvió de forma definitiva el manejo de mensajes fragmentados o concatenados.
+\end{enumerate}
+
+\section{Bibliografía}
+\begin{enumerate}[label={[\arabic*]}, leftmargin=2em]
+    \item djgaven588. \textit{ICC: Cliente simple de IRC implementado en C\#}. Repositorio de código abierto en GitHub. Disponible en: \url{https://github.com/djgaven588/ICC}
+    
+    \item Parth Nan. \textit{FullTCP-Chat-in-C: Servidor de chat multi-cliente en C usando sockets TCP y POSIX Threads}. Repositorio de código abierto en GitHub. Disponible en: \url{https://github.com/parthnan/FullTCP-Chat-in-C}
+    
+    \item Simple Works. \textit{chat-starter: Plantilla básica para aplicaciones de chat multiusuario}. Repositorio de código abierto en GitHub. Disponible en: \url{https://github.com/simple-works/chat-starter/}
+    
+    \item Troy D. Hanson. \textit{uthash: Implementación de tablas hash para estructuras en C}. Documentación y código fuente bajo licencia BSD. Disponible en: \url{https://github.com/troydhanson/uthash}
+    
+    \item Yarthax23. \textit{unix-chat-server: Servidor de chat multihilo con sockets UNIX en C}. Repositorio de código abierto en GitHub. Disponible en: \url{https://github.com/Yarthax23/unix-chat-server}
+    
+    \item Refactoring Guru. \textit{Catálogo de Patrones de Diseño de Software}. Guía de referencia sobre patrones creacionales, estructurales y de comportamiento en español. Disponible en: \url{https://refactoring.guru/es/design-patterns/catalog}
+    
+    \item Microsoft Learn. \textit{Patrón Publisher-Subscriber (Publicador-Suscriptor)}. Guía de arquitectura de aplicaciones en Azure y sistemas distribuidos en español. Disponible en: \url{https://learn.microsoft.com/es-es/azure/architecture/patterns/publisher-subscriber}
+    
+    \item Dave Gamble. \textit{cJSON: Analizador sintáctico ultraligero de JSON en ANSI C}. Repositorio de código abierto en GitHub. Disponible en: \url{https://github.com/DaveGamble/cJSON}
+    
+    \item Microsoft Corporation. \textit{Programación de red en .NET: Documentación de la clase TcpClient y System.Text.Json}. Microsoft Learn, 2024. Disponible en: \url{https://learn.microsoft.com/es-es/dotnet/api/system.net.sockets.tcpclient}
+\end{enumerate}
+
 \end{document}
