@@ -27,8 +27,9 @@ Para compilar y generar el reporte usa el comando: *Para el uso de este comando 
 Para abrir el reporte usa el comando:
 - make abrir-reporte
 
-NOTA: El servidor tambien puede ejecutarse mediante otro puerto con: 
+NOTA:
+El servidor tambien puede ejecutarse mediante otro puerto con: 
 - ./Servidor/servidor <puerto>
 
-	  El cliente puede conectarse a otro IP y puerto con: 
+El cliente puede conectarse a otro IP y puerto con: 
 - cd Cliente && dotnet run <ip_servidor> <puerto>
